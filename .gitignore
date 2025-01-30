@@ -1,4 +1,7 @@
 Algorithm/
 __pycache__/
-agent*
+agent-*
 checkpoint*
+*.ps
+tmp*
+*tmp

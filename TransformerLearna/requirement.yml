@@ -1,0 +1,15 @@
+viennarna==2.5.0a5
+numpy
+pandas
+requests
+pytest
+pylint
+tensorflow==2.2
+pynisher
+scikits.bootstrap
+hpbandster
+tqdm
+black
+Distance
+tensorforce
+dataclasses

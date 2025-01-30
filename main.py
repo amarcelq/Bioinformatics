@@ -4,15 +4,12 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from sklearn.metrics import f1_score, roc_auc_score, matthews_corrcoef
 from ViennaRNA import RNA
-#from seaborn import violinplot
 import matplotlib.pyplot as plt
 import time
 import numpy as np
 import os
 import warnings
-#from Algorithm.Learna.src.learna import design_rna
 from typing import Iterator, Optional
-from Algorithm.TransformerLearna import design_rna as transformer_design_rna
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -121,6 +118,8 @@ def run_learna(structure,
 
     if not os.environ["CONDA_DEFAULT_ENV"] == "learna_tools":
         raise OSError("You first have to activate the learna_tools venv.")
+    
+    from Algorithm.Learna.src.learna import design_rna
 
     learna = design_rna.Learna()
 
@@ -234,40 +233,44 @@ def run_meta_learna_adapt(structure: str,
 
 @measure_time
 def run_transformer_learna(structures):
-    transformer_learna = transformer_design_rna.TransformerLearna()
+    from TransformerLearna.main import TransformerLearna
+
+    transformer_learna = TransformerLearna()
 
     if isinstance(structures, str):
         structures = [structures]
 
-    results = transformer_learna.design_rna(structures)
+    results = transformer_learna.run(structures)
 
     return results
 
-    # transformer_learna = TransformerLearna()
-
-    #structure = transformer_learna.design_rna(structure)
-
-def run_algorithm(structures: list, algorithm, parallelize=True, min_parallel_size=40) -> dict:
+def run_algorithm(structures: list, algorithm, parallelize=True, min_parallel_size=40, sequence_by_seqence=True) -> dict:
     result: Optional(Iterator, list) = []
 
-    if parallelize:
-        long_structures = [structure for structure in structures if len(structure) > min_parallel_size]
-        short_structures = [structure for structure in structures if len(structure) <= min_parallel_size]
-        
-        result_short = {structure: algorithm(structure) for structure in short_structures}
+    if sequence_by_seqence:
+        if parallelize:
+            long_structures = [structure for structure in structures if len(structure) > min_parallel_size]
+            short_structures = [structure for structure in structures if len(structure) <= min_parallel_size]
+            
+            result_short = {structure: algorithm(structure) for structure in short_structures}
 
 
-        with ThreadPoolExecutor() as executor:
-            result = executor.map(algorithm, long_structures)
-        
-        result_long = {structure: r for structure, r in zip(structures, result)}
+            with ThreadPoolExecutor() as executor:
+                result = executor.map(algorithm, long_structures)
+            
+            result_long = {structure: r for structure, r in zip(structures, result)}
 
-        return {**result_short, **result_long}
+            return {**result_short, **result_long}
 
+        else:
+            result = [algorithm(structure) for structure in structures]
+            
+            return {structure: r for structure, r in zip(structures, result)}
     else:
-        result = [algorithm(structure) for structure in structures]
-        
-        return {structure: r for structure, r in zip(structures, result)}
+        results, wall_time, cpu_time = algorithm(structures)
+        wall_time = wall_time / len(structures)
+        cpu_time = cpu_time / len(structures)
+        return {structure: (sequence, wall_time, cpu_time) for structure, sequence in results.items()}
 
 ###############
 ### Metrics ###
@@ -356,30 +359,11 @@ def F1Score(predicted_structure: str, real_structure: str):
 
     return f1_score(list(predicted_structure), list(real_structure), average="micro")
 
-def ViolinPlot(data: pd.DataFrame):
-    violinplot(data, x="algorithm", y="f1_score")
-    plt.savefig("../pictures/violinplot.png", dpi=300)
-
 def MCC(predicted_structure: str, real_structure: str):
     if len(predicted_structure) != len(real_structure):
         raise ValueError("Lengths of Stuctures have to be same.")
 
     return matthews_corrcoef(list(predicted_structure), list(real_structure))
-
-def AUC(predicted_structure: str, real_structure: str):
-    if len(predicted_structure) != len(real_structure):
-        raise ValueError("Lengths of Stuctures have to be same.")
-    elif len(np.unique(predicted_structure)) <= 1 or len(np.unique(real_structure)) <= 1:
-        return None
-    
-    def encode_to_numeric(structure):
-        mapping = {'.': 0, '(': 1, ')': 2}
-
-        y = np.array([mapping[c] for c in structure])
-        
-        return np.eye(len(mapping))[y]
-
-    return roc_auc_score(encode_to_numeric(predicted_structure), encode_to_numeric(real_structure), average="macro", multi_class="ovr")
 
 def compute_metrics(predicted_sequence: str, real_structure: str, real_sequence: str):
     predicted_structure = run_rnafold(predicted_sequence)
@@ -387,11 +371,10 @@ def compute_metrics(predicted_sequence: str, real_structure: str, real_sequence:
     rnapdist = RNApdist(predicted_sequence, real_sequence)
     f1score = F1Score(predicted_structure, real_structure)
     mcc = MCC(predicted_structure, real_structure)
-    auc = AUC(predicted_structure, real_structure)
 
-    return rnadist_string, rnadist_tree, rnapdist, f1score, mcc, auc
+    return rnadist_string, rnadist_tree, rnapdist, f1score, mcc
 
-def append_to_file(filename, seq_len, wall_time, cpu_time, rnadist_string, rnadist_tree, rnapdist, f1score, mcc, auc):
+def append_to_file(filename, seq_len, wall_time, cpu_time, rnadist_string, rnadist_tree, rnapdist, f1score, mcc):
     file_path = f"results/{filename}.csv"
     df = pd.DataFrame([{
         "seq_len": seq_len if seq_len else np.nan,
@@ -402,7 +385,6 @@ def append_to_file(filename, seq_len, wall_time, cpu_time, rnadist_string, rnadi
         "rnapdist": round(float(rnapdist), 3) if rnapdist else np.nan,
         "f1score": round(f1score, 3) if f1score else np.nan,
         "mcc": round(mcc, 3) if mcc else np.nan,
-        "auc": round(auc, 3) if auc else np.nan
     }])
     if not os.path.exists(file_path):
         df.to_csv(file_path, mode='w', index=False, header=True)
@@ -422,7 +404,7 @@ def dataset_etherna():
 
     return dataset_etherna
 
-def run(dataset_name: str, algorithm_name: str, parallelize=True):
+def run(dataset_name: str, algorithm_name: str, parallelize=True, sequence_by_sequence=True):
     dataset = {"badura": dataset_badura(), "etherna": dataset_etherna()}[dataset_name]
 
     algorithm = {"rnainverse": run_rnainverse, 
@@ -434,21 +416,21 @@ def run(dataset_name: str, algorithm_name: str, parallelize=True):
                  "transformer_learna": run_transformer_learna}[algorithm_name]
 
     print(f"Length {dataset_name}: {len(dataset)} Algorithm: {algorithm_name}")
-    chunk_size = 1
+    chunk_size = 2
     max_structure_len = 400
     dataset = dataset[dataset["structure"].str.len() <= max_structure_len].dropna().reset_index()
     for j in range(0, len(dataset), chunk_size):
         end = j + chunk_size if j + chunk_size < len(dataset) - 1 else len(dataset) - 1
         chunk = dataset[j:end]
         print(f"{time.time()} Start Chunk\n{chunk}")
-        predictions = run_algorithm(chunk["structure"].tolist(), algorithm, parallelize=parallelize)
+        predictions = run_algorithm(chunk["structure"].tolist(), algorithm, parallelize=parallelize, sequence_by_seqence=sequence_by_sequence)
         for i, (structure, prediction) in enumerate(predictions.items()):
             real_sequence = chunk.iloc[i]["sequence"]
             pred_sequence, wall_time, cpu_time = prediction
             if pred_sequence is not None:
                 if len(pred_sequence) == len(real_sequence):
-                    rnadist_string, rnadist_tree, rnapdist, f1score, mcc, auc = compute_metrics(pred_sequence, structure, real_sequence)
-                    append_to_file(f"results_{algorithm_name}_{dataset_name}", len(pred_sequence), wall_time, cpu_time, rnadist_string, rnadist_tree, rnapdist, f1score, mcc, auc)
+                    rnadist_string, rnadist_tree, rnapdist, f1score, mcc = compute_metrics(pred_sequence, structure, real_sequence)
+                    append_to_file(f"results_{algorithm_name}_{dataset_name}", len(pred_sequence), wall_time, cpu_time, rnadist_string, rnadist_tree, rnapdist, f1score, mcc)
         print("\n")
 
 if __name__ == "__main__":
@@ -459,7 +441,7 @@ if __name__ == "__main__":
     # run("etherna", "inforna")
 
     # run("badura", "rnaredprint")
-    # run("etherna", "rnaredprint")
+    #run("etherna", "rnaredprint")
 
     # run("badura", "learna")
     # run("etherna", "learna")
@@ -470,5 +452,5 @@ if __name__ == "__main__":
     # run("etherna", "meta_learna_adapt")
     # run("badura", "meta_learna_adapt")
 
-    run("etherna", "transformer_learna")
+    run("etherna", "transformer_learna", sequence_by_sequence=False)
     # run("badura", "transformer_learna")

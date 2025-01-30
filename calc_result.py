@@ -1,4 +1,6 @@
 import pandas as pd
+from seaborn import violinplot
+from matplotlib.pyplot import plt
 
 algorithms = ["rnainverse", "inforna", "rnaredprint", "learna", "meta_learna", "meta_learna_adapt"]
 
@@ -14,3 +16,7 @@ for algorithm in algorithms:
     print(f"Percent correct classified: {round((df_etherna['f1score'] == 1).sum() * 100 / len(df_etherna))}")
 
     print()
+
+def ViolinPlot(data: pd.DataFrame):
+    violinplot(data, x="algorithm", y="f1_score")
+    plt.savefig("../pictures/violinplot.png", dpi=300)

@@ -1,0 +1,1 @@
+{"states": {"type": "int", "shape": [59], "num_values": 4}, "actions": {"type": "int", "num_values": 4}, "internals": {}, "initial_internals": {"policy": {}}}
