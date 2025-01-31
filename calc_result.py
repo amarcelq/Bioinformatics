@@ -1,8 +1,11 @@
 import pandas as pd
 from seaborn import violinplot
-from matplotlib.pyplot import plt
+import matplotlib.pyplot as plt
 
 algorithms = ["rnainverse", "inforna", "rnaredprint", "learna", "meta_learna", "meta_learna_adapt"]
+
+all_f1_data = []
+all_rnapdist_data = []
 
 for algorithm in algorithms:
     print(f"Results Babura: {algorithm}")
@@ -17,6 +20,26 @@ for algorithm in algorithms:
 
     print()
 
-def ViolinPlot(data: pd.DataFrame):
-    violinplot(data, x="algorithm", y="f1_score")
-    plt.savefig("../pictures/violinplot.png", dpi=300)
+    df_badura['algorithm'] = algorithm
+    df_badura['dataset'] = 'Babura'
+    df_etherna['algorithm'] = algorithm
+    df_etherna['dataset'] = 'Etherna'
+    
+    all_f1_data.append(df_badura[['f1score', 'algorithm', 'dataset']])
+    all_f1_data.append(df_etherna[['f1score', 'algorithm', 'dataset']])
+
+    all_rnapdist_data.append(df_badura[['rnapdist', 'algorithm', 'dataset']])
+    all_rnapdist_data.append(df_etherna[['rnapdist', 'algorithm', 'dataset']])
+
+
+all_f1_data = pd.concat(all_f1_data)
+all_rnapdist_data = pd.concat(all_rnapdist_data)
+
+
+def plot_violinplot(data, y):
+    plt.figure(figsize=(10, 6))
+    violinplot(data=data, x="algorithm", y=y, hue="dataset", split=True)
+    plt.savefig(f"../pictures/violinplot_{y}.png", dpi=300)
+
+plot_violinplot(all_f1_data, y="f1score")
+plot_violinplot(all_rnapdist_data, y="rnapdist")

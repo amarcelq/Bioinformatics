@@ -15,7 +15,7 @@ class NetworkConfig:
     dim_feed_forward = embedding_dim * 4
     num_encoder_blocks = 8
     dropout_rate = 0.1 
-    output_units = 57
+    output_units = 59
 
 def positional_encoding(length, depth):
   depth = depth/2
@@ -126,10 +126,9 @@ class AgentConfig:
     Dataclass providing the agent configuration.
     """
     learning_rate: float = 6.442010833400271e-05
-    batch_size: int = 123
+    batch_size: int = 16
     likelihood_ratio_clipping: float = 0.3
     entropy_regularization: float = 0.00015087352506343337
-    max_episode_timesteps = 600
     optimizer=dict(
         optimizer='adam', learning_rate=learning_rate, clipping_threshold=1e-2,
         multi_step=10, subsampling_fraction=64, linesearch_iterations=5,

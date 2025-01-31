@@ -2,14 +2,14 @@
 import pandas as pd
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
-from sklearn.metrics import f1_score, roc_auc_score, matthews_corrcoef
+from sklearn.metrics import f1_score, matthews_corrcoef
 from ViennaRNA import RNA
-import matplotlib.pyplot as plt
 import time
 import numpy as np
 import os
 import warnings
 from typing import Iterator, Optional
+import re
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -81,21 +81,31 @@ def run_inforna(structure: str):
         )
     
 @measure_time
-def run_rnaredprint(structure: str):
-    result = subprocess.run(
-        ['RNARedPrint', structure],
-        text=True,
-        capture_output=True,
-    )
-    output = result.stdout
+def run_rnaredprint(structure: str, num_sequences=1000):
+    try:
+        command = [
+            "RNARedPrint", structure, "--num", str(num_sequences)
+        ]
 
-    if not output:
-        return ""
+        result = subprocess.run(command, capture_output=True, text=True, check=True)
+        
+        output_lines = result.stdout.strip().split("\n")
+        best_sequence, best_energy = None, float("inf")
 
-    sequence = output.strip().split()[1]
+        for line in output_lines:
+            match = re.match(r"([AUGC]+)\s+GC=[0-9.]+\s+E1=(-?[0-9.]+)", line)
+            if match:
+                sequence, energy = match.groups()
+                energy = float(energy)
 
-    return sequence
+                # Update best sequence based on lowest energy
+                if energy < best_energy:
+                    best_sequence, best_energy = sequence, energy
 
+        return best_sequence
+    except:
+        return None
+    
 @measure_time
 def run_learna(structure, 
                mutation_threshold=5, 
@@ -232,7 +242,7 @@ def run_meta_learna_adapt(structure: str,
     return sequence
 
 @measure_time
-def run_transformer_learna(structures):
+def run_transformer_learna(structures, agent_dir="agent", agent_filename="agent"):
     from TransformerLearna.main import TransformerLearna
 
     transformer_learna = TransformerLearna()
@@ -240,11 +250,25 @@ def run_transformer_learna(structures):
     if isinstance(structures, str):
         structures = [structures]
 
-    results = transformer_learna.run(structures)
+    results = transformer_learna.run(structures, agent_dir=agent_dir, agent_filename=agent_filename)
 
     return results
 
-def run_algorithm(structures: list, algorithm, parallelize=True, min_parallel_size=40, sequence_by_seqence=True) -> dict:
+@measure_time
+def run_mcts(structure):
+    result = subprocess.run(["/home/marcel/miniconda3/envs/python2.7/bin/python", "Algorithm/MCTS-RNA/MCTS-RNA.py", "-s", structure],
+                    capture_output=True, 
+                    text=True, 
+                    check=True)
+
+    sequence = None
+    output_lines = result.stdout.strip().split("\n")
+    for line in output_lines:
+        if line.startswith("Solution:"):
+            sequence = line.replace("Solution:","")
+    return sequence
+
+def run_algorithm(structures: list, algorithm, parallelize=True, min_parallel_size=20, sequence_by_seqence=True) -> dict:
     result: Optional(Iterator, list) = []
 
     if sequence_by_seqence:
@@ -254,11 +278,10 @@ def run_algorithm(structures: list, algorithm, parallelize=True, min_parallel_si
             
             result_short = {structure: algorithm(structure) for structure in short_structures}
 
-
             with ThreadPoolExecutor() as executor:
-                result = executor.map(algorithm, long_structures)
-            
-            result_long = {structure: r for structure, r in zip(structures, result)}
+                result = list(executor.map(algorithm, long_structures))
+    
+            result_long = {structure: r for structure, r in zip(long_structures, result)}
 
             return {**result_short, **result_long}
 
@@ -413,20 +436,23 @@ def run(dataset_name: str, algorithm_name: str, parallelize=True, sequence_by_se
                  "learna": run_learna, 
                  "meta_learna": run_meta_learna, 
                  "meta_learna_adapt": run_meta_learna_adapt,
-                 "transformer_learna": run_transformer_learna}[algorithm_name]
+                 "transformer_learna": run_transformer_learna,
+                 "mcts": run_mcts}[algorithm_name]
 
     print(f"Length {dataset_name}: {len(dataset)} Algorithm: {algorithm_name}")
-    chunk_size = 2
+    batch_size = 50
     max_structure_len = 400
     dataset = dataset[dataset["structure"].str.len() <= max_structure_len].dropna().reset_index()
-    for j in range(0, len(dataset), chunk_size):
-        end = j + chunk_size if j + chunk_size < len(dataset) - 1 else len(dataset) - 1
+    for j in range(0, len(dataset), batch_size):
+        end = j + batch_size if j + batch_size < len(dataset) - 1 else len(dataset) - 1
         chunk = dataset[j:end]
         print(f"{time.time()} Start Chunk\n{chunk}")
         predictions = run_algorithm(chunk["structure"].tolist(), algorithm, parallelize=parallelize, sequence_by_seqence=sequence_by_sequence)
-        for i, (structure, prediction) in enumerate(predictions.items()):
+        for i in range(len(chunk)):
             real_sequence = chunk.iloc[i]["sequence"]
-            pred_sequence, wall_time, cpu_time = prediction
+            structure = chunk.iloc[i]["structure"]
+
+            pred_sequence, wall_time, cpu_time = predictions[structure]
             if pred_sequence is not None:
                 if len(pred_sequence) == len(real_sequence):
                     rnadist_string, rnadist_tree, rnapdist, f1score, mcc = compute_metrics(pred_sequence, structure, real_sequence)
@@ -437,11 +463,11 @@ if __name__ == "__main__":
     # run("badura", "rnainverse")
     # run("etherna", "rnainverse")
 
-    # run("badura", "inforna")
-    # run("etherna", "inforna")
+    #run("badura", "inforna")
+    #run("etherna", "inforna")
 
-    # run("badura", "rnaredprint")
-    #run("etherna", "rnaredprint")
+    #run("badura", "rnaredprint")
+    #run("etherna", "rnaredprint", parallelize=True)
 
     # run("badura", "learna")
     # run("etherna", "learna")
@@ -452,5 +478,8 @@ if __name__ == "__main__":
     # run("etherna", "meta_learna_adapt")
     # run("badura", "meta_learna_adapt")
 
-    run("etherna", "transformer_learna", sequence_by_sequence=False)
+    run("badura", "mcts")
+    # run("etherna", "mcts")
+
+    # run("etherna", "transformer_learna", sequence_by_sequence=False)
     # run("badura", "transformer_learna")

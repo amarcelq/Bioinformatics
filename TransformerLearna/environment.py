@@ -317,7 +317,7 @@ class RnaDesignEnvironment(Environment):
 
         state = self._get_state()
         reward = self._get_reward()
-        terminal = reward ** 1/self._env_config.reward_exponent >= target_threshold and self.design.all_bases_once_solved
+        terminal = reward ** (1/self._env_config.reward_exponent) >= target_threshold
 
         return state, terminal, reward
 
