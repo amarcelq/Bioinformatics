@@ -7,6 +7,10 @@ algorithms = ["rnainverse", "inforna", "rnaredprint", "learna", "meta_learna", "
 all_f1_data = []
 all_rnapdist_data = []
 
+print()
+import sys
+sys.exit()
+
 for algorithm in algorithms:
     print(f"Results Babura: {algorithm}")
     df_badura = pd.read_csv(f"results/results_{algorithm}_badura.csv")
