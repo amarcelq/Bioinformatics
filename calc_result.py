@@ -2,7 +2,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-algorithms = ["rnainverse", "inforna", "rnaredprint", "learna", "meta_learna", "meta_learna_adapt"]
+algorithms = ["rnainverse", "inforna", "rnaredprint", "learna", "meta_learna", "meta_learna_adapt", "mcts"]
 
 all_f1_data = []
 all_rnapdist_data = []
@@ -24,12 +24,14 @@ for algorithm in algorithms:
     df_badura['dataset'] = 'Babura'
     df_etherna['algorithm'] = algorithm
     df_etherna['dataset'] = 'Etherna'
-    
+
     all_f1_data.append(df_badura[['f1score', 'algorithm', 'dataset']])
     all_f1_data.append(df_etherna[['f1score', 'algorithm', 'dataset']])
 
     all_rnapdist_data.append(df_badura[['rnapdist', 'algorithm', 'dataset']])
     all_rnapdist_data.append(df_etherna[['rnapdist', 'algorithm', 'dataset']])
+
+
 
 print(f"Results Etherna: Transformer Learna")
 df_etherna = pd.read_csv("results/results_transformer_learna_etherna.csv")
