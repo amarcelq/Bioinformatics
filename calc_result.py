@@ -1,15 +1,11 @@
 import pandas as pd
-from seaborn import violinplot
+import seaborn as sns
 import matplotlib.pyplot as plt
 
 algorithms = ["rnainverse", "inforna", "rnaredprint", "learna", "meta_learna", "meta_learna_adapt"]
 
 all_f1_data = []
 all_rnapdist_data = []
-
-print()
-import sys
-sys.exit()
 
 for algorithm in algorithms:
     print(f"Results Babura: {algorithm}")
@@ -35,6 +31,11 @@ for algorithm in algorithms:
     all_rnapdist_data.append(df_badura[['rnapdist', 'algorithm', 'dataset']])
     all_rnapdist_data.append(df_etherna[['rnapdist', 'algorithm', 'dataset']])
 
+print(f"Results Etherna: Transformer Learna")
+df_etherna = pd.read_csv("results/results_transformer_learna_etherna.csv")
+print(df_etherna.mean())
+print(f"Percent correct classified: {round((df_etherna['f1score'] == 1).sum() * 100 / len(df_etherna))}")
+
 
 all_f1_data = pd.concat(all_f1_data)
 all_rnapdist_data = pd.concat(all_rnapdist_data)
@@ -42,7 +43,13 @@ all_rnapdist_data = pd.concat(all_rnapdist_data)
 
 def plot_violinplot(data, y):
     plt.figure(figsize=(10, 6))
-    violinplot(data=data, x="algorithm", y=y, hue="dataset", split=True)
+    sns.set_context("paper", rc={"font.size": 20,"axes.titlesize": 20, "axes.labelsize": 20})   
+    sns.violinplot(data=data, x="algorithm", y=y, hue="dataset", split=True)
+    plt.xticks(fontsize=18, rotation=45)
+    plt.yticks(fontsize=18)
+    plt.legend(fontsize=17) 
+    plt.xlabel("")
+    plt.tight_layout()
     plt.savefig(f"../pictures/violinplot_{y}.png", dpi=300)
 
 plot_violinplot(all_f1_data, y="f1score")
